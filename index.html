@@ -59,7 +59,7 @@
     const weekNames=['5s · Build','3s · Strength','5/3/1 · Heavy','Deload and recover','Next cycle · 5s'];
     const sets=(weight,reps,n,labels)=>Array.from({length:n},(_,i)=>({weight,reps,label:labels?.[i]||`Set ${i+1}`}));
     const ex=(id,name,values,note='',optional=false)=>({id,name,sets:values,note,optional});
-    const DEFAULT_CONFIG={percent:85,benchTM:140,advanceNextCycle:true,e1rm:{bench:190,squat:295,deadlift:320,ohp:140}};
+    const DEFAULT_CONFIG={percent:85,benchTM:140,advanceNextCycle:false,e1rm:{bench:190,squat:295,deadlift:320,ohp:140}};
     const round5=(value)=>Math.max(0,Math.round(value/5)*5);
     function cfg(){const p=state.config||{};return {...DEFAULT_CONFIG,...p,e1rm:{...DEFAULT_CONFIG.e1rm,...(p.e1rm||{})}};}
     function trainingMax(lift,w){

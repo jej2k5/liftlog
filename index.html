@@ -55,11 +55,11 @@
   (() => {
     'use strict';
     const VERSION=1, STORE='liftlog-fiveweek-v1';
-    const days=[{short:'MON',title:'Bench strength',detail:'Bench + upper back',label:'Monday'},{short:'TUE',title:'Deadlift strength',detail:'Hinge + lower body',label:'Tuesday'},{short:'THU',title:'Overhead press',detail:'Shoulders + paused bench',label:'Thursday'},{short:'SAT',title:'Squat + bench',detail:'Bench volume + legs',label:'Saturday'}];
+    const days=[{short:'MON',title:'Bench + Mansour chest',detail:'Bench 5/3/1 + Mansour chest strength accessories',label:'Monday'},{short:'TUE',title:'Deadlift + Back/Bi',detail:'Deadlift 5/3/1 + Mansour back and biceps',label:'Tuesday'},{short:'THU',title:'Overhead + Shoulder/Tri',detail:'Overhead press 5/3/1 + Mansour shoulders and triceps',label:'Thursday'},{short:'SAT',title:'Squat + Mansour legs',detail:'Bench volume + Squat 5/3/1 + Mansour legs',label:'Saturday'}];
     const weekNames=['5s · Build','3s · Strength','5/3/1 · Heavy','Deload and recover','Next cycle · 5s'];
     const sets=(weight,reps,n,labels)=>Array.from({length:n},(_,i)=>({weight,reps,label:labels?.[i]||`Set ${i+1}`}));
     const ex=(id,name,values,note='',optional=false)=>({id,name,sets:values,note,optional});
-    const DEFAULT_CONFIG={percent:85,benchTM:140,advanceNextCycle:false,e1rm:{bench:190,squat:295,deadlift:320,ohp:140}};
+    const DEFAULT_CONFIG={percent:85,benchTM:140,advanceNextCycle:false,accessoryMode:'focused',e1rm:{bench:190,squat:295,deadlift:320,ohp:140}};
     const round5=(value)=>Math.max(0,Math.round(value/5)*5);
     function cfg(){const p=state.config||{};return {...DEFAULT_CONFIG,...p,e1rm:{...DEFAULT_CONFIG.e1rm,...(p.e1rm||{})}};}
     function trainingMax(lift,w){
@@ -73,22 +73,80 @@
       const scheme=schemes[w===5?0:w-1],tm=trainingMax(lift,w);
       return scheme.map(([pct,reps],i)=>({weight:round5(tm*pct/100),reps,label:`${pct}% · ${reps}${i===2&&w!==4?'+':''}`}));
     }
+    // Source: Ziad Mansour, The Mansour Method, men's STRENGTH workouts, pp. 9–12.
+    // These are accessories only; 5/3/1 replaces the source's working-set prescription
+    // for squat, bench, deadlift, and military press. Focused sets are our reduced-volume
+    // adaptation, NOT numbers from Mansour's PDF. "Full PDF" retains his set structure.
+    const MANSOUR_ACCESSORIES=[
+      [ // Monday: Chest (strength), PDF p. 10
+        {id:'mansour-incline-bb',name:'Barbell Incline Press (Wide Grip)',page:10,prescription:'6 sets: 12 / 6 / 1+ / 1+ / 6 / 12',full:[12,6,1,1,6,12],labels:['12 reps','6 reps','1+ reps','1+ reps','6 reps','12 reps'],focused:[8,8],on:true,rest:'1–2 min',note:'Original six-set incline sequence. The two-set version is a bench-priority adaptation; leave 1–2 reps in reserve.'},
+        {id:'mansour-db-flat',name:'Dumbbell Flat Press',page:10,prescription:'3 × 6–8',full:[6,6,6],focused:[8,8],on:false,rest:'2–5 min',note:'Heavy chest pressing. Add only when your heavy bench work still recovers well.'},
+        {id:'mansour-incline-db-fly',name:'Incline Dumbbell Flyes',page:10,prescription:'3 × 6–8',full:[6,6,6],focused:[8,8],on:false,rest:'2–5 min',note:'Controlled range, no aggressive stretch.'},
+        {id:'mansour-cable-fly',name:'Cable Flyes',page:10,prescription:'3 × 6–8',full:[6,6,6],focused:[10,10],on:true,rest:'2–5 min',note:'Controlled chest accessory. Focused version uses 2 × 10 rather than the original 3 × 6–8.'},
+        {id:'mansour-weighted-dips',name:'Weighted Dips',page:10,prescription:'3 × 1+',full:[1,1,1],focused:[5,5],on:false,rest:'2–5 min',note:'Optional. Use bodyweight or assistance instead of added weight when needed; skip with shoulder discomfort.'}
+      ],
+      [ // Tuesday: Back / Bi (strength), PDF p. 11
+        {id:'mansour-standard-pullup',name:'Standard-Grip Pull-Ups',page:11,prescription:'3 × 12 MAX',full:[12,12,12],focused:[6,6,6],on:true,rest:'1–2 min',note:'Bodyweight or assisted as needed. Source says 12 MAX; avoid actual failure in this bench-priority block.'},
+        {id:'mansour-lateral-pullup',name:'Lateral-Grip Pull-Ups',page:11,prescription:'3 × 12 MAX',full:[12,12,12],focused:[6,6],on:false,rest:'1–2 min',note:'Alternate pull-up grip; optional if standard-grip pull-ups already tax your recovery.'},
+        {id:'mansour-underhand-pullup',name:'Underhand Pull-Ups',page:11,prescription:'3 × 12 MAX',full:[12,12,12],focused:[6,6],on:false,rest:'1–2 min',note:'Underhand-grip option. Original prescribes 12 MAX.'},
+        {id:'mansour-wide-bb-row',name:'Wide-Grip Bent-Over Barbell Rows',page:11,prescription:'3 × 3–6',full:[3,3,3],focused:[6,6],on:true,rest:'2–5 min',note:'Keep a stable torso after deadlifts; use a chest-supported row replacement if your lower back is fatigued.'},
+        {id:'mansour-single-db-row',name:'Single-Arm Dumbbell Rows',page:11,prescription:'3 × 6–8 each',full:[6,6,6],focused:[8,8],on:false,rest:'2–5 min',note:'Each arm; log the load of one dumbbell.'},
+        {id:'mansour-hammer-curl',name:'Hammer Curls',page:11,prescription:'3 × 6–8',full:[6,6,6],focused:[8,8],on:true,rest:'2–5 min',note:'Biceps and forearms, controlled repetitions.'},
+        {id:'mansour-ez-curl',name:'Standing EZ-Bar Curls',page:11,prescription:'3 × 6–8',full:[6,6,6],focused:[8,8],on:false,rest:'2–5 min',note:'Optional second curl variation.'},
+        {id:'mansour-rope-curl',name:'Cable Rope Curls',page:11,prescription:'3 × 6–8',full:[6,6,6],focused:[8,8],on:false,rest:'2–5 min',note:'Optional third curl variation.'}
+      ],
+      [ // Thursday: Shoulder / Tris (strength), PDF p. 12
+        {id:'mansour-behind-neck',name:'Behind-the-Neck Barbell Press',page:12,prescription:'3 × 1–6',full:[3,3,3],focused:[6,6],on:false,rest:'2–5 min',note:'Original PDF exercise. Optional only; avoid with shoulder restriction or discomfort. Not necessary for bench progress.'},
+        {id:'mansour-bradford',name:'Bradford Press',page:12,prescription:'3 × 6–8',full:[6,6,6],focused:[8,8],on:false,rest:'2–5 min',note:'Additional overhead accessory. Can overlap substantially with 5/3/1 press.'},
+        {id:'mansour-shrugs',name:'Barbell Shrugs',page:12,prescription:'3 × 8–12',full:[8,8,8],focused:[10,10],on:false,rest:'1–2 min',note:'Trap work; optional.'},
+        {id:'mansour-lateral-raise',name:'Lateral Dumbbell Raises',page:12,prescription:'3 × 6–10',full:[6,6,6],focused:[10,10],on:true,rest:'1–2 min',note:'Focus on shoulder control, not momentum.'},
+        {id:'mansour-rear-delt',name:'Bent-Over Dumbbell Rear-Delt Flyes',page:12,prescription:'3 × 6–10',full:[6,6,6],focused:[10,10],on:true,rest:'1–2 min',note:'Rear shoulder work to complement pressing.'},
+        {id:'mansour-close-grip',name:'Close-Grip Bench Press',page:12,prescription:'3 × 4–8',full:[4,4,4],focused:[6,6],on:false,rest:'2–5 min',note:'Triceps-dominant pressing; useful for midpoint strength, but reduce/skip paused bench on this day if fatigued.'},
+        {id:'mansour-skullcrushers',name:'Dumbbell Flat-Bench Skullcrushers',page:12,prescription:'3 × 6–8',full:[6,6,6],focused:[8,8],on:false,rest:'2–5 min',note:'Control elbow position; optional if triceps already fatigued.'},
+        {id:'mansour-pressdown',name:'Cable Triceps Pushdown',page:12,prescription:'3 × 6–8',full:[6,6,6],focused:[10,10],on:true,rest:'2–5 min',note:'Focused version uses 2 × 10, without going to failure.'}
+      ],
+      [ // Saturday: Legs (strength), PDF p. 9
+        {id:'mansour-adductors',name:'Hip Adductors',page:9,prescription:'3 × 12–20',full:[12,12,12],focused:[15,15],on:false,rest:'1–2 min',note:'Machine or cable alternative.'},
+        {id:'mansour-abductors',name:'Hip Abductors',page:9,prescription:'3 × 12–20',full:[12,12,12],focused:[15,15],on:false,rest:'1–2 min',note:'Machine or band alternative.'},
+        {id:'mansour-pause-squat',name:'Pause Squats',page:9,prescription:'3 × 3–5',full:[3,3,3],focused:[3,3],on:false,rest:'2–5 min',note:'Use lighter loads than 5/3/1 squat, pause at depth, and stop if fatigue affects form.'},
+        {id:'mansour-rdl',name:'Romanian Deadlifts',page:9,prescription:'3 × 6–8',full:[6,6,6],focused:[6,6],on:true,rest:'2–5 min',note:'Hinge accessory; avoid excessive lower-back loading after deadlift day.'},
+        {id:'mansour-bulgarian',name:'Bulgarian Split Squats',page:9,prescription:'3 × 6–8 each leg',full:[6,6,6],focused:[8,8],on:false,rest:'2–5 min',note:'Log reps per leg; stable knee and hip range.'},
+        {id:'mansour-quad-ext',name:'Leg Extensions',page:9,prescription:'4 × 8–10',full:[8,8,8,8],focused:[10,10],on:true,rest:'1–2 min',note:'Quad accessory, smooth control.'},
+        {id:'mansour-calf',name:'Calf Raises',page:9,prescription:'4 sets: 10 full + 10 top-half + 10 s hold',full:[20,20,20,20],focused:[20,20],on:true,rest:'1–2 min',note:'Each set = 10 full reps, 10 top-half partials, and a 10-second top hold. Log 20 reps for the repetitions; the hold is additional.'}
+      ]
+    ];
+    function mansourExercises(day,w){
+      const full=cfg().accessoryMode==='full';
+      return MANSOUR_ACCESSORIES[day].map(a=>{
+        const reps=full?a.full:a.focused;
+        const rows=reps.map((r,i)=>({weight:'',reps:r,label:full&&a.labels?.[i]?a.labels[i]:`Set ${i+1}`}));
+        return {...ex(a.id,a.name,rows,`${a.note} · Original PDF p.${a.page}: ${a.prescription}. Rest ${a.rest}.`),group:'mansour',page:a.page,prescription:a.prescription,rest:a.rest,focusedDefault:a.on};
+      });
+    }
+    function legacyExercises(day,w){
+      const old=[
+        [ex('row','Chest-supported row',sets('',8,3),'From the previous Lift Log plan.'),ex('close','Close-grip bench',sets([95,100,100,0,100][w-1],w===3?5:6,2),'From the previous Lift Log plan.')],
+        [ex('split','Split squat',sets('',8,2),'From the previous Lift Log plan.'),ex('core','Dead bug',sets('',8,2),'From the previous Lift Log plan.')],
+        [ex('pulldown','Lat pulldown',sets('',8,3),'From the previous Lift Log plan.')],
+        [ex('pressdown','Triceps pressdown',sets('',10,2),'From the previous Lift Log plan.')]
+      ];
+      return old[day].map(e=>({...e,group:'legacy'}));
+    }
     function mk(w){
-      const i=w-1;
-      const deload=w===4;
+      const i=w-1,deload=w===4;
       const bench=main531('bench',w),deadlift=main531('deadlift',w),ohp=main531('ohp',w),squat=main531('squat',w);
-      const volWeights=[115,120,125,100,120], pauseWeights=[95,100,105,85,95], closeWeights=[95,100,100,0,100];
+      const volWeights=[115,120,125,100,120],pauseWeights=[95,100,105,85,95];
       return [
-        [ex('bench-heavy','Bench press · 5/3/1',bench,'Main lift: percentages are based on your current, conservative bench training max. The + is optional clean reps, never failure.'),...(deload?[]:[ex('row','Chest-supported row',sets('',8,3),'8–10 controlled reps; enter dumbbell or machine load.'),ex('close','Close-grip bench',sets(closeWeights[i],w===3?5:6,2),'Stop short of failure; moderate grip, controlled bar path.')])],
-        [ex('deadlift','Deadlift · 5/3/1',deadlift,'Stop the final set when bar speed or technique deteriorates. No grinders.'),...(deload?[]:[ex('split','Split squat',sets('',8,2),'8 controlled reps per leg.'),ex('core','Dead bug',sets('',8,2),'Core stability, 8 reps per side.')])],
-        [ex('ohp','Overhead press · 5/3/1',ohp,'Keep overhead press and deadlift on separate days; clean overhead reps, no grind.'),...(deload?[]:[ex('pause','Paused bench press',sets(pauseWeights[i],3,2),'One-second pause at chest; accelerate through midpoint with stable bar path.'),ex('pulldown','Lat pulldown',sets('',8,3),'8–10 controlled repetitions.')])],
-        [ex('bench-volume','Bench press · volume',sets(volWeights[i],w===3?4:5,deload?2:3),'Bench priority supplemental work. Smooth, unassisted sets; reduce the load if RPE exceeds 8.'),ex('squat','Back squat · 5/3/1',squat,'After bench volume, follow the squat percentage sets. Reduce the bench volume if it compromises squat technique.'),...(deload?[]:[ex('pressdown','Triceps pressdown',sets('',10,2),'10–12 reps without reaching failure.')])]
+        [ex('bench-heavy','Bench press · 5/3/1',bench,'Main lift: percentages use your conservative bench training max. Optional + reps must be clean.'),...mansourExercises(0,w),...legacyExercises(0,w)],
+        [ex('deadlift','Deadlift · 5/3/1',deadlift,'Main lift: preserve technique and bar speed, no grinding.'),...mansourExercises(1,w),...legacyExercises(1,w)],
+        [ex('ohp','Overhead press · 5/3/1',ohp,'Main lift: clean overhead reps. Deadlift is on a different day.'),...(deload?[]:[ex('pause','Paused bench · extra technique',sets(pauseWeights[i],3,2),'Bench-priority ADDITION, not part of the Mansour PDF. Pause one second; stay submaximal.')]),...mansourExercises(2,w),...legacyExercises(2,w)],
+        [ex('bench-volume','Bench press · extra volume',sets(volWeights[i],w===3?4:5,deload?2:3),'Bench-priority ADDITION, not part of the Mansour PDF. Smooth, unassisted sets; reduce load if needed.'),ex('squat','Back squat · 5/3/1',squat,'Main lift: 5/3/1 percentage work. Perform after bench volume if bench is the priority.'),...mansourExercises(3,w),...legacyExercises(3,w)]
       ];
     }
     let plan=[];
     let memoryOnly=false;
-    const blank=()=>({version:VERSION, sets:{}, sessions:{}, config:JSON.parse(JSON.stringify(DEFAULT_CONFIG)), selectedWeek:1,selectedDay:0, screen:'overview', theme:'dark'});
-    function load(){try{const raw=localStorage.getItem(STORE);if(!raw)return blank();const p=JSON.parse(raw);if(!p || typeof p!=='object'|| p.version!==VERSION) return blank();return {...blank(),...p,sets:p.sets||{},sessions:p.sessions||{}}}catch(e){memoryOnly=true;return blank()}}
+    const blank=()=>({version:VERSION, sets:{}, sessions:{}, accessories:{}, config:JSON.parse(JSON.stringify(DEFAULT_CONFIG)), selectedWeek:1,selectedDay:0, screen:'overview', theme:'dark'});
+    function load(){try{const raw=localStorage.getItem(STORE);if(!raw)return blank();const p=JSON.parse(raw);if(!p || typeof p!=='object'|| p.version!==VERSION) return blank();return {...blank(),...p,sets:p.sets||{},sessions:p.sessions||{},accessories:p.accessories||{}}}catch(e){memoryOnly=true;return blank()}}
     let state=load();
     plan=Array.from({length:5},(_,i)=>mk(i+1));
     function save(){try{localStorage.setItem(STORE,JSON.stringify(state));}catch(e){memoryOnly=true;} }
@@ -98,8 +156,17 @@
     const number=(n)=>typeof n==='number'&&Number.isFinite(n)?n.toLocaleString('en-US',{maximumFractionDigits:1}):'—';
     const getSet=(w,d,e,j)=>state.sets[id(w,d,e.id,j)]||{};
     const session=(w,d)=>state.sessions[sid(w,d)]||{};
-    const doneSets=(w,d)=>plan[w-1][d].reduce((a,e)=>a+e.sets.filter((_,j)=>getSet(w,d,e,j).done).length,0);
-    const totalSets=(w,d)=>plan[w-1][d].reduce((a,e)=>a+e.sets.length,0);
+    function loggedFor(w,d,e){return e.sets.some((_,j)=>{const v=getSet(w,d,e,j);return !!v.done || v.weight!==undefined || v.reps!==undefined;});}
+    function selected(e,w,d){
+      if(e.group==='legacy')return loggedFor(w,d,e);
+      if(e.group!=='mansour')return true;
+      const chosen=state.accessories?.[`w${w}_d${d}_${e.id}`] ?? state.accessories?.[e.id];
+      if(typeof chosen==='boolean')return chosen;
+      return w!==4 && (cfg().accessoryMode==='full'||!!e.focusedDefault);
+    }
+    const activeExercises=(w,d)=>plan[w-1][d].filter(e=>selected(e,w,d));
+    const doneSets=(w,d)=>activeExercises(w,d).reduce((a,e)=>a+e.sets.filter((_,j)=>getSet(w,d,e,j).done).length,0);
+    const totalSets=(w,d)=>activeExercises(w,d).reduce((a,e)=>a+e.sets.length,0);
     const sessionDone=(w,d)=>!!session(w,d).finished;
     const weekDone=(w)=>days.filter((_,d)=>sessionDone(w,d)).length;
     function nextWorkout(){for(let w=1;w<=5;w++)for(let d=0;d<4;d++)if(!sessionDone(w,d))return {w,d};return {w:5,d:3};}
@@ -109,7 +176,7 @@
     function overview(){
       const n=nextWorkout(),completed=Array.from({length:5},(_,i)=>weekDone(i+1)).reduce((a,b)=>a+b,0),totalSetsDone=Object.values(state.sets).filter(x=>x.done).length;
       document.getElementById('overview').innerHTML=`
-       <div class="intro"><div><div class="eyebrow">Your strength, one rep at a time</div><h1>Stronger every week.</h1><p>5/3/1 main lifts, Mansour-inspired accessories, and bench-specific midpoint practice. Weights adjust to your training maxes.</p></div></div>
+       <div class="intro"><div><div class="eyebrow">Your strength, one rep at a time</div><h1>Stronger every week.</h1><p>5/3/1 main lifts with the actual Mansour strength accessories from PDF pages 9–12, plus bench-specific midpoint practice. Weights adjust to your training maxes.</p></div></div>
        <div class="card hero"><div class="eyebrow">Up next · Week ${n.w}</div><h2>${days[n.d].label}<br>${days[n.d].title}</h2><p>${days[n.d].detail}. Check off every set, log the weights you actually lifted, and record your effort.</p><button class="btn" data-open="${n.w},${n.d}" type="button">Open workout <span aria-hidden="true">↗</span></button></div>
        <div class="statgrid"><div class="stat"><strong>${completed}<span> / 20</span></strong><span>Sessions finished</span></div><div class="stat"><strong>${totalSetsDone}</strong><span>Sets logged</span></div><div class="stat"><strong>${Math.round(completed/20*100)}%</strong><span>Block complete</span></div></div>
        <div class="card"><div class="row"><h3>Five-week progress</h3><span class="tiny muted">${completed}/20 sessions</span></div><div style="margin:14px 0 16px" class="progressbar"><i style="width:${completed/20*100}%"></i></div>${weekChips(state.selectedWeek)}<div class="sectionhead"><h3>Week ${state.selectedWeek} · ${weekNames[state.selectedWeek-1]}</h3><button class="btn secondary smallbtn" data-nav="workout" type="button">View week</button></div><div class="sessionlist">${days.map((d,i)=>`<div class="sessionitem"><div><b>${d.label} · ${d.title}</b><br><span>${sessionDone(state.selectedWeek,i)?'Completed':'Ready to log'} · ${doneSets(state.selectedWeek,i)}/${totalSets(state.selectedWeek,i)} sets</span></div><button class="btn smallbtn ${sessionDone(state.selectedWeek,i)?'secondary':''}" data-open="${state.selectedWeek},${i}" type="button">${sessionDone(state.selectedWeek,i)?'Review':'Open'}</button></div>`).join('')}</div></div>
@@ -118,7 +185,7 @@
     }
     function exerciseHTML(e,w,d,n){
       const completed=e.sets.filter((_,i)=>getSet(w,d,e,i).done).length;
-      return `<article class="card exercise"><header class="exhead"><div><div class="eyebrow">Exercise ${n+1}</div><h3>${escapeHTML(e.name)}</h3><div class="exsubtitle">${e.sets.length} sets · ${completed}/${e.sets.length} complete ${e.optional?'· Optional attempts':''}</div><p class="exnote">${escapeHTML(e.note)}</p></div><span class="exnum">${completed}/${e.sets.length}</span></header><table class="settable"><thead><tr><th scope="col">Set</th><th scope="col">Weight (lb)</th><th scope="col">Reps</th><th scope="col">Done</th></tr></thead><tbody>${e.sets.map((set,j)=>{
+      return `<article class="card exercise"><header class="exhead"><div><div class="eyebrow">${e.group==='mansour'?`Mansour strength · PDF p.${e.page}`:e.group==='legacy'?'Previous plan · saved history':`Main / bench work · Exercise ${n+1}`}</div><h3>${escapeHTML(e.name)}</h3><div class="exsubtitle">${e.sets.length} sets · ${completed}/${e.sets.length} complete ${e.group==='mansour'?` · Original: ${escapeHTML(e.prescription)}`:''}</div><p class="exnote">${escapeHTML(e.note)}</p></div><div class="stack" style="align-items:flex-end"><span class="exnum">${completed}/${e.sets.length}</span>${e.group==='mansour'?`<button class="btn ghost smallbtn" data-accessory="${e.id}" type="button" aria-label="Remove ${escapeHTML(e.name)} from this workout">Remove</button>`:''}</div></header><table class="settable"><thead><tr><th scope="col">Set</th><th scope="col">Weight (lb)</th><th scope="col">Reps</th><th scope="col">Done</th></tr></thead><tbody>${e.sets.map((set,j)=>{
       const v=getSet(w,d,e,j),isdone=!!v.done,weight= v.weight===undefined?set.weight:v.weight,reps=v.reps===undefined?set.reps:v.reps;
       const k=id(w,d,e.id,j);return `<tr class="${isdone?'checked':''}"><td class="rowlabel">${escapeHTML(set.label)}</td><td><input class="num" aria-label="${escapeHTML(e.name)} ${escapeHTML(set.label)} weight in pounds" data-field="weight" data-key="${k}" type="number" min="0" max="2000" step="any" inputmode="decimal" value="${escapeHTML(weight)}" placeholder="–"></td><td><input class="num" aria-label="${escapeHTML(e.name)} ${escapeHTML(set.label)} completed repetitions" data-field="reps" data-key="${k}" type="number" min="0" max="100" step="1" inputmode="numeric" value="${escapeHTML(reps)}"></td><td><button type="button" class="setcheck ${isdone?'checked':''}" aria-label="${isdone?'Uncheck':'Complete'} ${escapeHTML(e.name)}, ${escapeHTML(set.label)}" aria-pressed="${isdone}" data-check="${k}">${isdone?'✓':'○'}</button></td></tr>`;
       }).join('')}</tbody></table><div class="exbottom">Tap the circle when a set is finished. Edit weight and reps to record what you actually did.</div></article>`;
@@ -131,7 +198,12 @@
       <div class="daystrip" role="group" aria-label="Select workout day">${days.map((day,i)=>`<button class="daytab ${d===i?'active':''}" data-day="${i}" type="button" aria-pressed="${d===i}"><span>${day.short}</span><b>${day.label.slice(0,3)}</b><span>${sessionDone(w,i)?'✓ Done':`${doneSets(w,i)} sets`}</span></button>`).join('')}</div>
       <div class="sessionhead"><div class="eyebrow">${days[d].label} · ${weekNames[w-1]}</div><div class="sessiontitle"><h2>${days[d].title}</h2><span class="tag">${ds}/${ts} sets</span></div><p class="hint">${days[d].detail}</p><div class="sessionmetrics"><div class="progressbar"><i style="width:${pct}%"></i></div><strong class="small">${pct}%</strong></div></div>
       ${w===5?'<div class="notice">Week 5 begins the next 5/3/1 cycle. Increased training maxes are conditional on finishing the previous cycle with clean, controlled reps. To repeat the original maxes instead, turn off the cycle increase in Settings. No 1RM testing is prescribed.</div>':''}
-      ${plan[w-1][d].map((e,i)=>exerciseHTML(e,w,d,i)).join('')}
+      ${activeExercises(w,d).filter(e=>e.group!=='mansour'&&e.group!=='legacy').map((e,i)=>exerciseHTML(e,w,d,i)).join('')}
+      <div class="sectionhead"><h2>Mansour strength accessories</h2><span class="tag">PDF p.${[10,11,12,9][d]}</span></div>
+      <div class="card" style="padding:14px 16px"><div class="row wrap"><div class="stack"><strong class="small">${cfg().accessoryMode==='full'?'Full PDF prescription':'Focused hybrid · reduced volume'}</strong><span class="hint">${MANSOUR_ACCESSORIES[d].filter(e=>selected({id:e.id,group:'mansour',focusedDefault:e.on},w,d)).length} of ${MANSOUR_ACCESSORIES[d].length} selected · Configure in Settings</span></div><button class="btn secondary smallbtn" data-nav="settings" type="button">Adjust plan</button></div>${cfg().accessoryMode==='full'?'<p class="hint" style="margin-top:10px">Full PDF volume is high, particularly alongside four 5/3/1 lifts and extra bench practice. Reduce it if recovery deteriorates.</p>':''}${w===4?'<p class="hint" style="margin-top:10px">Deload week: accessories are off by default. Add only very easy work if desired.</p>':''}</div>
+      ${activeExercises(w,d).filter(e=>e.group==='mansour').map((e,i)=>exerciseHTML(e,w,d,i)).join('')}
+      <details class="card" style="padding:15px 16px"><summary style="font-weight:800;cursor:pointer">Browse all Mansour accessories (${MANSOUR_ACCESSORIES[d].length}) · Add / remove</summary><p class="hint" style="margin-top:10px">Original exercise names and prescriptions come from the PDF. Focused mode reduces sets to fit the 5/3/1 + bench-priority block. Tap Add to include a movement in this session only; existing set logs are never deleted.</p><div class="stack" style="margin-top:12px">${plan[w-1][d].filter(e=>e.group==='mansour').map(e=>`<div class="row" style="padding:11px 0;border-top:1px solid var(--line)"><div class="stack" style="gap:2px"><strong class="small">${escapeHTML(e.name)}</strong><span class="hint">Original: ${escapeHTML(e.prescription)} · p.${e.page} · ${e.rest}</span></div><button class="btn ${selected(e,w,d)?'secondary':''} smallbtn" type="button" data-accessory="${e.id}" aria-label="${selected(e,w,d)?'Remove':'Add'} ${escapeHTML(e.name)}">${selected(e,w,d)?'✓ Added':'+ Add'}</button></div>`).join('')}</div></details>
+      ${activeExercises(w,d).some(e=>e.group==='legacy')?`<details class="card" style="padding:15px 16px"><summary style="font-weight:750;cursor:pointer">Previously logged exercises from earlier Lift Log</summary><p class="hint" style="margin-top:7px">Old session data is preserved below; these are not part of the Mansour PDF.</p>${activeExercises(w,d).filter(e=>e.group==='legacy').map((e,i)=>exerciseHTML(e,w,d,i)).join('')}</details>`:''}
       <div class="card"><div class="row wrap" style="margin-bottom:15px"><h3>Rest timer</h3><div class="row wrap"><button class="btn secondary smallbtn" data-rest="120" type="button">2 min</button><button class="btn secondary smallbtn" data-rest="180" type="button">3 min</button><button class="btn secondary smallbtn" data-rest="300" type="button">5 min</button></div></div><div class="editgrid"><div><label class="formlabel" for="sessionRPE">Session RPE</label><select id="sessionRPE" class="rpeselect"><option value="">Select effort</option>${['5','6','7','7.5','8','8.5','9','10'].map(v=>`<option value="${v}" ${s.rpe===v?'selected':''}>RPE ${v}</option>`).join('')}</select></div><div><label class="formlabel" for="workoutDate">Workout date</label><input id="workoutDate" style="min-height:44px;padding:10px;width:100%" type="date" value="${escapeHTML(s.date||'')}"></div></div><div style="margin-top:14px"><label class="formlabel" for="sessionNotes">Notes</label><textarea id="sessionNotes" placeholder="Bar speed, sticking point, energy, pain, sleep, anything worth remembering…">${escapeHTML(s.notes||'')}</textarea></div><p class="hint" style="margin:12px 0">${finished?'Workout marked finished. You can still edit your log.':'Mark finished when you are done, even if you intentionally skipped some sets.'}</p><button class="btn full ${finished?'secondary':''}" data-action="finish" type="button">${finished?'✓ Finished · tap to reopen':'Finish workout'}</button></div>`;
     }
     function progress(){
@@ -140,7 +212,7 @@
       const records=[];
       for(let w=1;w<=5;w++)for(let d=0;d<4;d++){
         const s=session(w,d);if(s.finished||doneSets(w,d)){records.push({w,d,s,done:doneSets(w,d),total:totalSets(w,d)});}
-        plan[w-1][d].forEach(e=>e.sets.forEach((p,j)=>{const v=getSet(w,d,e,j);if(!v.done)return;setsLogged++;const wt=+(v.weight===undefined?p.weight:v.weight),reps=+(v.reps===undefined?p.reps:v.reps);if(wt>0&&reps>0){volume+=wt*reps;workingSets++;}}));
+        activeExercises(w,d).forEach(e=>e.sets.forEach((p,j)=>{const v=getSet(w,d,e,j);if(!v.done)return;setsLogged++;const wt=+(v.weight===undefined?p.weight:v.weight),reps=+(v.reps===undefined?p.reps:v.reps);if(wt>0&&reps>0){volume+=wt*reps;workingSets++;}}));
       }
       const datestr=v=>v?new Date(`${v}T12:00:00`).toLocaleDateString('en-US',{month:'short',day:'numeric'}):'Date not set';
       document.getElementById('progress').innerHTML=`<div class="intro"><div><div class="eyebrow">Progress dashboard</div><h1>Proof of the work.</h1><p>A clear view of your training, completed sessions, and logged lifting volume.</p></div></div>
@@ -155,9 +227,10 @@
        <div class="editgrid" style="margin-top:13px"><div><label class="formlabel" for="tm-percent">Training max percentage</label><select id="tm-percent" style="min-height:44px;width:100%;padding:8px">${[80,85,90].map(v=>`<option value="${v}" ${Number(cfg().percent)===v?'selected':''}>${v}%</option>`).join('')}</select></div><div><label class="formlabel" for="bench-tm">Bench TM safety override (lb)</label><input id="bench-tm" class="num" style="width:100%" type="number" inputmode="decimal" min="45" max="600" step="5" value="${escapeHTML(cfg().benchTM)}"></div></div>
        <div style="margin-top:14px"><label><input id="advance-next" type="checkbox" ${cfg().advanceNextCycle?'checked':''}> Add +5 lb upper / +10 lb lower to week 5 (only if earned)</label></div>
        <div class="baselinegrid" style="margin-top:14px">${[['bench','Bench'],['squat','Squat'],['deadlift','Deadlift'],['ohp','Press']].map(([key,label])=>`<div class="baseline"><label>${label} TM</label><b>${trainingMax(key,1)} lb</b></div>`).join('')}</div><p class="hint" style="margin-top:10px">Changes to maxes change planned set weights immediately, but already-entered actual weights and completed sets are retained. Export a backup before a major plan change.</p></div>
+     <div class="card"><h3>Mansour accessory selection</h3><p class="info" style="margin:8px 0 13px">The original strength exercises on PDF pages 9–12 are included. Choose the lower-volume hybrid or the complete original accessory prescriptions. Each session lets you add/remove individual movements without changing other weeks.</p><label class="formlabel" for="accessory-mode">Accessory volume</label><select id="accessory-mode" style="width:100%;padding:12px;min-height:46px"><option value="focused" ${cfg().accessoryMode!=='full'?'selected':''}>Focused hybrid (recommended with 5/3/1)</option><option value="full" ${cfg().accessoryMode==='full'?'selected':''}>Full Mansour strength accessories (high volume)</option></select><p class="hint" style="margin-top:10px">Changing this resets custom accessory selections (for all weeks), but does not erase your logged sets. Main 5/3/1 weights stay unchanged. If you need to preserve exact old rep targets, export a backup first.</p><div class="notice" style="margin-top:13px;margin-bottom:0">The full PDF exercises are provided for reference and optional logging, not a recommendation to complete every set on top of 5/3/1. Behind-the-neck pressing and weighted dips are optional and require suitable technique and shoulder tolerance.</div></div>
      <div class="card"><h3>Data & backups</h3><p class="info" style="margin:8px 0 17px">Export a backup before switching phones, browsers, or clearing site data. Import that JSON backup on the new device to restore all logged sets and notes.</p><div class="settingsgroup"><button class="btn secondary full" data-action="export" type="button">↓ Export backup (JSON)</button><button class="btn secondary full" data-action="csv" type="button">↓ Export log (CSV)</button><button class="btn secondary full" data-action="import" type="button">↑ Restore backup (JSON)</button><button class="btn ghost full" data-action="print" type="button">Print this view</button></div></div>
      <div class="card"><h3>Use it like an app on iPhone</h3><p class="info" style="margin-top:10px">For the best experience, host these files on a secure website (such as GitHub Pages), open that URL in Safari, tap <strong>Share</strong>, then <strong>Add to Home Screen</strong>. You can also open the standalone HTML file, but local saving may be restricted in file previews.</p><p class="info" style="margin-top:8px">When hosted over HTTPS, the included web app manifest and service worker can make the tracker installable and available offline after the first load.</p></div>
-     <div class="card"><h3>Training safety</h3><p class="info" style="margin-top:9px">Bench 185 lb is a longer-term goal, not a guaranteed five-week result. The program now uses 5/3/1 main lifts with an 85% TM default and a conservative bench override. Keep working sets near RPE 7–8 or easier, avoid assisted repetitions, and consider medical clearance before maximal tests given your cardiovascular concerns. Stop for unusual chest discomfort, dizziness, or breathlessness.</p></div>
+     <div class="card"><h3>Training safety</h3><p class="info" style="margin-top:9px">Bench 185 lb is a longer-term goal, not a guaranteed five-week result. The program now uses 5/3/1 primary lifts, Mansour Method strength accessory exercise names from PDF pages 9–12, an 85% TM default, and a conservative bench override. Focused accessory prescriptions are adaptations, not Mansour's original sets. Keep working sets near RPE 7–8 or easier, avoid assisted repetitions, and consider medical clearance before maximal tests given your cardiovascular concerns. Stop for unusual chest discomfort, dizziness, or breathlessness.</p></div>
      <div class="card"><h3>Reset</h3><p class="info" style="margin:8px 0 14px">Permanently erase locally saved training logs, dates and session notes from this browser.</p><button class="btn danger full" data-action="reset" type="button">Erase local workout data</button></div>
      ${memoryOnly?'<div class="notice">Browser storage appears unavailable. Export backups frequently: changes may not survive closing this page.</div>':''}`;}
     const screens=['overview','workout','progress','settings'];
@@ -169,7 +242,7 @@
     function startTimer(secs){clearInterval(timerInterval);timerEnd=Date.now()+secs*1000;document.getElementById('timerbar').classList.add('show');timerUpdate();timerInterval=setInterval(timerUpdate,500);toast(`${secs/60}-minute rest started`)}
     function download(filename,content,type){const blob=new Blob([content],{type});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1200)}
     function exportJson(){download('lift-log-backup.json',JSON.stringify({...state,exportedAt:new Date().toISOString()},null,2),'application/json');toast('Backup exported')}
-    function exportCsv(){const table=[['week','day','exercise','set','planned_lb','planned_reps','actual_lb','actual_reps','completed','date','session_rpe','notes']];for(let w=1;w<=5;w++)for(let d=0;d<4;d++)for(const e of plan[w-1][d])for(let j=0;j<e.sets.length;j++){const p=e.sets[j],v=getSet(w,d,e,j),s=session(w,d);table.push([w,days[d].label,e.name,p.label,p.weight,p.reps,v.weight===undefined?p.weight:v.weight,v.reps===undefined?p.reps:v.reps,v.done?'yes':'no',s.date||'',s.rpe||'',s.notes||'']);}download('lift-log-sessions.csv',table.map(row=>row.map(cell=>'"'+String(cell??'').replace(/"/g,'""')+'"').join(',')).join('\r\n'),'text/csv;charset=utf-8');toast('CSV exported')}
+    function exportCsv(){const table=[['week','day','exercise','set','planned_lb','planned_reps','actual_lb','actual_reps','completed','date','session_rpe','notes']];for(let w=1;w<=5;w++)for(let d=0;d<4;d++)for(const e of activeExercises(w,d))for(let j=0;j<e.sets.length;j++){const p=e.sets[j],v=getSet(w,d,e,j),s=session(w,d);table.push([w,days[d].label,e.name,p.label,p.weight,p.reps,v.weight===undefined?p.weight:v.weight,v.reps===undefined?p.reps:v.reps,v.done?'yes':'no',s.date||'',s.rpe||'',s.notes||'']);}download('lift-log-sessions.csv',table.map(row=>row.map(cell=>'"'+String(cell??'').replace(/"/g,'""')+'"').join(',')).join('\r\n'),'text/csv;charset=utf-8');toast('CSV exported')}
     function handleAction(type){switch(type){case'theme':state.theme=state.theme==='dark'?'light':'dark';save();render();break;case'finish':{const w=state.selectedWeek,d=state.selectedDay,key=sid(w,d);const orig=session(w,d);const finished=!orig.finished;const now=new Date();const date=orig.date||new Date(now.getTime()-now.getTimezoneOffset()*60000).toISOString().slice(0,10);state.sessions[key]={...orig,finished,date:finished?date:orig.date};save();render();toast(finished?'Workout finished ✓':'Workout reopened');break;}case'export':exportJson();break;case'csv':exportCsv();break;case'import':document.getElementById('importInput').click();break;case'print':window.print();break;case'reset':if(confirm('Erase all locally saved workout data? Export a backup first if you want to keep it.')){state=blank();save();render();toast('Workout data reset')}break;case'timer-stop':clearInterval(timerInterval);timerInterval=null;document.getElementById('timerbar').classList.remove('show');break;}}
     document.addEventListener('click',ev=>{const b=ev.target.closest('button');if(!b)return;
       if(b.dataset.nav){go(b.dataset.nav);return;}
@@ -178,6 +251,7 @@
       if(b.dataset.open){const[w,d]=b.dataset.open.split(',').map(Number);state.selectedWeek=w;state.selectedDay=d;go('workout');return;}
       if(b.dataset.check){const key=b.dataset.check;state.sets[key]={...state.sets[key],done:!state.sets[key]?.done,updatedAt:new Date().toISOString()};save();render();return;}
       if(b.dataset.rest){startTimer(+b.dataset.rest);return;}
+      if(b.dataset.accessory){const e=plan[state.selectedWeek-1][state.selectedDay].find(x=>x.id===b.dataset.accessory&&x.group==='mansour');if(e){state.accessories={...state.accessories,[`w${state.selectedWeek}_d${state.selectedDay}_${e.id}`]:!selected(e,state.selectedWeek,state.selectedDay)};save();render();}return;}
       if(b.dataset.action)handleAction(b.dataset.action);
     });
     document.addEventListener('change',ev=>{const el=ev.target;
@@ -186,11 +260,12 @@
       if(el.id==='tm-percent'){state.config={...cfg(),percent:Number(el.value)};save();render();return;}
       if(el.id==='bench-tm'){const v=Number(el.value);if(v>=45&&v<=600){state.config={...cfg(),benchTM:v};save();render();}return;}
       if(el.id==='advance-next'){state.config={...cfg(),advanceNextCycle:el.checked};save();render();return;}
+      if(el.id==='accessory-mode'){state.config={...cfg(),accessoryMode:el.value==='full'?'full':'focused'};state.accessories={};save();render();return;}
       if(el.id==='sessionRPE'){mutateSession('rpe',el.value);return;}
       if(el.id==='workoutDate'){mutateSession('date',el.value);return;}
     });
     document.addEventListener('input',ev=>{if(ev.target.id==='sessionNotes')mutateSession('notes',ev.target.value)});
-    document.getElementById('importInput').addEventListener('change',async ev=>{const f=ev.target.files?.[0];if(!f)return;try{const txt=await f.text(),data=JSON.parse(txt);if(data.version!==VERSION||!data.sets||!data.sessions||typeof data.sets!=='object'||typeof data.sessions!=='object')throw Error('Invalid backup file');if(!confirm('Restore backup? This replaces the workout logs currently saved in this browser.'))return;state={...blank(),...data,screen:'overview',selectedWeek:Math.max(1,Math.min(5,Number(data.selectedWeek)||1)),selectedDay:Math.max(0,Math.min(3,Number(data.selectedDay)||0)),theme:data.theme==='light'?'light':'dark'};save();render();toast('Backup restored');}catch(e){alert('Could not import this backup. Check that it is a Lift Log JSON file.')}finally{ev.target.value=''}});
+    document.getElementById('importInput').addEventListener('change',async ev=>{const f=ev.target.files?.[0];if(!f)return;try{const txt=await f.text(),data=JSON.parse(txt);if(data.version!==VERSION||!data.sets||!data.sessions||typeof data.sets!=='object'||typeof data.sessions!=='object')throw Error('Invalid backup file');if(!confirm('Restore backup? This replaces the workout logs currently saved in this browser.'))return;state={...blank(),...data,accessories:data.accessories||{},screen:'overview',selectedWeek:Math.max(1,Math.min(5,Number(data.selectedWeek)||1)),selectedDay:Math.max(0,Math.min(3,Number(data.selectedDay)||0)),theme:data.theme==='light'?'light':'dark'};save();render();toast('Backup restored');}catch(e){alert('Could not import this backup. Check that it is a Lift Log JSON file.')}finally{ev.target.value=''}});
     // A service worker is optional; the standalone HTML works without it.
     if(location.protocol==='https:' && 'serviceWorker' in navigator){navigator.serviceWorker.register('./sw.js').catch(()=>{});}
     render();
